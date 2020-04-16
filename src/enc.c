@@ -4,6 +4,7 @@
 #include <libavformat/avformat.h>
 #include <libavutil/opt.h>
 #include <libavutil/timestamp.h>
+#include <libswscale/swscale.h>
 
 #include <r.h>
 
@@ -20,16 +21,18 @@ struct enc_state {
 struct enc_state* enc_init(const struct enc_opts* o)
 {
     trace("initializing the encoder");
-    debug("encoder settings: vcodec=%s out_path=%s",
-          o->vcodec, o->out_path);
+    debug("encoder settings: vcodec=%s output=%s",
+          o->vcodec, o->output);
 
     struct enc_state* st = calloc(1, sizeof(*st)); CHECK_MALLOC(st);
+
+    avformat_network_init();
 
     const AVCodec* codec = avcodec_find_encoder_by_name(o->vcodec);
     CHECK_NOT(codec, NULL, "unable to find codec: %s", o->vcodec);
 
-    int r = avformat_alloc_output_context2(&st->fc, NULL, NULL, o->out_path);
-    CHECK_AV(r, "unable to allocate format context: filename=%s", o->out_path);
+    int r = avformat_alloc_output_context2(&st->fc, NULL, "flv", o->output);
+    CHECK_AV(r, "unable to allocate format context: output=%s", o->output);
 
     st->cc = avcodec_alloc_context3(codec);
     CHECK_NOT(st->cc, NULL, "unable to create codec context");
@@ -42,13 +45,12 @@ struct enc_state* enc_init(const struct enc_opts* o)
     st->cc->height = o->height;
     st->cc->time_base = (AVRational){1, o->fps};
     st->cc->framerate = (AVRational){o->fps, 1};
-    st->cc->pix_fmt = AV_PIX_FMT_RGB24;
+    st->cc->pix_fmt = AV_PIX_FMT_YUV420P;
+    st->cc->gop_size = 2*o->fps;
+    st->cc->keyint_min = o->fps;
 
-    r = av_opt_set(st->cc->priv_data, "preset", "fast", 0);
+    r = av_opt_set(st->cc->priv_data, "preset", "ultrafast", 0);
     CHECK_AV(r, "unable to set preset");
-
-    r = av_opt_set(st->cc->priv_data, "profile", "high444", 0);
-    CHECK_AV(r, "unable to set profile");
 
     r = avcodec_open2(st->cc, codec, NULL);
     CHECK_AV(r, "unable to open codec");
@@ -76,10 +78,10 @@ struct enc_state* enc_init(const struct enc_opts* o)
     r = avcodec_parameters_from_context(st->stream->codecpar, st->cc);
     CHECK_AV(r, "avcodec_parameters_from_context");
 
-    av_dump_format(st->fc, 0, o->out_path, 1);
+    av_dump_format(st->fc, 0, o->output, 1);
 
-    r = avio_open(&st->fc->pb, o->out_path, AVIO_FLAG_WRITE);
-    CHECK_AV(r, "avio_open(%s)", o->out_path);
+    r = avio_open(&st->fc->pb, o->output, AVIO_FLAG_WRITE);
+    CHECK_AV(r, "avio_open(%s)", o->output);
 
     r = avformat_write_header(st->fc, NULL);
     CHECK_AV(r, "avformat_write_header");
@@ -100,12 +102,36 @@ static void dump_pkt(struct enc_state* st)
          st->pkt->stream_index);
 }
 
-static void send_frame(struct enc_state* st, AVFrame* frame)
+void enc_encode_frame(struct enc_state* st, const struct frame* f)
 {
-    if(frame) trace("sending frame pts=%"PRId64, frame->pts);
+    int r;
+    if(f == NULL) {
+        r = avcodec_send_frame(st->cc, NULL);
+        CHECK_AV(r, "avcodec_send_frame");
+    } else {
+        st->frame->pts = f->index;
 
-    int r = avcodec_send_frame(st->cc, frame);
-    CHECK_AV(r, "avcodec_send_frame");
+        trace("transforming frame pts=%"PRId64, st->frame->pts);
+
+        struct SwsContext* sws = sws_getContext(
+            f->width, f->height, AV_PIX_FMT_RGB24,
+            st->frame->width, st->frame->height, st->frame->format,
+            SWS_BILINEAR,
+            NULL, NULL, NULL);
+
+        r = sws_scale(sws,
+            (const uint8_t*[]) { (uint8_t*)f->fb, NULL, NULL },
+            (int[]) { 3*f->width, 0, 0 }, 0, f->height,
+            st->frame->data,
+            st->frame->linesize);
+        CHECK_AV(r, "sws_scale");
+
+        sws_freeContext(sws);
+
+        trace("sending frame pts=%"PRId64, st->frame->pts);
+        r = avcodec_send_frame(st->cc, st->frame);
+        CHECK_AV(r, "avcodec_send_frame");
+    }
 
     while(r >= 0) {
         r = avcodec_receive_packet(st->cc, st->pkt);
@@ -126,7 +152,7 @@ void enc_deinit(struct enc_state* st)
 {
     trace("deinitializing the encoder");
 
-    send_frame(st, NULL);
+    enc_encode_frame(st, NULL);
 
     int r = av_write_trailer(st->fc);
     CHECK_AV(r, "av_write_trailer");
@@ -140,13 +166,3 @@ void enc_deinit(struct enc_state* st)
     free(st);
 }
 
-color_t* enc_get_buffer(struct enc_state* st)
-{
-    return (color_t*)st->frame->data[0];
-}
-
-void enc_encode_frame(struct enc_state* st, size_t index)
-{
-    st->frame->pts = index;
-    send_frame(st, st->frame);
-}
