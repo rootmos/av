@@ -4,11 +4,11 @@ export BUILD ?= $(shell pwd)/build
 SERVER ?= ber
 OUTPUT = rtmp://$(SERVER).contribute.live-video.net/app/$(STREAM_KEY)
 
-run: build
-	$(BUILD)/main -o "$(OUTPUT)"
-
 build: libr
 	$(MAKE) -C src
+
+run: build
+	$(BUILD)/av -o "$(OUTPUT)"
 
 libr:
 	@mkdir -p "$(BUILD)"

@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <libgen.h>
 
 #include <r.h>
 
@@ -10,9 +11,9 @@ struct options {
     const char* output;
 };
 
-static void print_usage(int fd, const char* prog)
+static void print_usage(int fd, char* prog)
 {
-    dprintf(fd, "usage: %s [OPTION]...\n", prog);
+    dprintf(fd, "usage: %s [OPTION]...\n", basename(prog));
     dprintf(fd, "\n");
     dprintf(fd, "options:\n");
     dprintf(fd, "  -o URL   output to this URL\n");

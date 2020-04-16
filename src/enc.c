@@ -165,4 +165,3 @@ void enc_deinit(struct enc_state* st)
 
     free(st);
 }
-
