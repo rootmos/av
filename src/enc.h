@@ -1,11 +1,10 @@
 #pragma once
 
-typedef struct { uint8_t r, g, b; } color_t;
+#include "g.h"
 
 struct frame {
-    int width, height;
     size_t index;
-    color_t* fb;
+    struct surface surface;
 };
 
 struct enc_opts {

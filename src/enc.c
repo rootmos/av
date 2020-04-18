@@ -114,14 +114,14 @@ void enc_encode_frame(struct enc_state* st, const struct frame* f)
         trace("transforming frame pts=%"PRId64, st->frame->pts);
 
         struct SwsContext* sws = sws_getContext(
-            f->width, f->height, AV_PIX_FMT_RGB24,
+            f->surface.width, f->surface.height, AV_PIX_FMT_RGB24,
             st->frame->width, st->frame->height, st->frame->format,
             SWS_BILINEAR,
             NULL, NULL, NULL);
 
         r = sws_scale(sws,
-            (const uint8_t*[]) { (uint8_t*)f->fb, NULL, NULL },
-            (int[]) { 3*f->width, 0, 0 }, 0, f->height,
+            (const uint8_t*[]) { (uint8_t*)f->surface.fb, NULL, NULL },
+            (int[]) { 3*f->surface.width, 0, 0 }, 0, f->surface.height,
             st->frame->data,
             st->frame->linesize);
         CHECK_AV(r, "sws_scale");
