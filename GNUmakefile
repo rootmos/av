@@ -7,14 +7,11 @@ OUTPUT ?= rtmp://$(SERVER).contribute.live-video.net/app/$(STREAM_KEY)
 build: libr
 	$(MAKE) -C src
 
-run: build
-	$(BUILD)/av -o "$(OUTPUT)"
+stream: build
+	$(BUILD)/av -f flv -o "$(OUTPUT)"
 
-local:
-	@$(MAKE) run OUTPUT=rtmp://localhost/ingest
-
-local-server-loop:
-	@while sleep 1; do ./local.sh; echo restarting; done
+local: build
+	./local.sh $(BUILD)/av
 
 libr:
 	@mkdir -p "$(BUILD)"
@@ -24,4 +21,4 @@ clean:
 	$(MAKE) -C libr clean
 	rm -rf $(BUILD)
 
-.PHONY: run build clean libr
+.PHONY: build stream local libr clean

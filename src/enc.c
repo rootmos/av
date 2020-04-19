@@ -21,8 +21,8 @@ struct enc_state {
 struct enc_state* enc_init(const struct enc_opts* o)
 {
     trace("initializing the encoder");
-    debug("encoder settings: vcodec=%s output=%s",
-          o->vcodec, o->output);
+    debug("encoder settings: vcodec=%s output=%s format=%s",
+          o->vcodec, o->output, o->format);
 
     struct enc_state* st = calloc(1, sizeof(*st)); CHECK_MALLOC(st);
 
@@ -31,7 +31,8 @@ struct enc_state* enc_init(const struct enc_opts* o)
     const AVCodec* codec = avcodec_find_encoder_by_name(o->vcodec);
     CHECK_NOT(codec, NULL, "unable to find codec: %s", o->vcodec);
 
-    int r = avformat_alloc_output_context2(&st->fc, NULL, "flv", o->output);
+    int r = avformat_alloc_output_context2(&st->fc, NULL,
+                                           o->format, o->output);
     CHECK_AV(r, "unable to allocate format context: output=%s", o->output);
 
     st->cc = avcodec_alloc_context3(codec);

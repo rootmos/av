@@ -12,6 +12,8 @@
 struct options {
     const char* output;
     const char* font_name;
+    const char* format;
+    int duration;
 };
 
 static void print_usage(int fd, char* prog)
@@ -27,17 +29,29 @@ static void print_usage(int fd, char* prog)
 static void parse_options(struct options* o, int argc, char* argv[])
 {
     memset(o, 0, sizeof(*o));
+    o->format = NULL;
+    o->duration = -1;
 
     int res;
-    while((res = getopt(argc, argv, "o:f:h")) != -1) {
+    while((res = getopt(argc, argv, "o:f:d:F:h")) != -1) {
         switch(res) {
         case 'o':
             o->output = strdup(optarg);
             CHECK_MALLOC(o->output);
             break;
         case 'f':
+            o->format = strdup(optarg);
+            CHECK_MALLOC(o->format);
+            break;
+        case 'F':
             o->font_name = strdup(optarg);
             CHECK_MALLOC(o->font_name);
+            break;
+        case 'd':
+            if(sscanf(optarg, "%d", &o->duration) != 1) {
+                error("unable to interpret %s as an integer", optarg);
+                exit(1);
+            }
             break;
         case 'h':
         default:
@@ -73,6 +87,7 @@ static struct state* state_init(struct options* opts)
     st->enc = enc_init(&(struct enc_opts) {
         .vcodec = "libx264",
         .output = opts->output,
+        .format = opts->format,
         .width = st->width, .height = st->height,
         .fps = st->fps,
     });
@@ -105,7 +120,8 @@ int main(int argc, char* argv[])
             .fb = buf
         }
     };
-    for(size_t i = 0; ; i++) {
+
+    for(size_t i = 0; o.duration < 0 || i < st->fps * o.duration; i++) {
         memset(buf, i, sizeof(buf));
         f.index = i;
 

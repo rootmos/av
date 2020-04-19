@@ -10,6 +10,7 @@ struct frame {
 struct enc_opts {
     const char* vcodec;
     const char* output;
+    const char* format;
 
     int width, height, fps;
 };
